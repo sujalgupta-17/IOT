@@ -1,0 +1,98 @@
+PRACTICAL NO: 3
+TITLE: INTERFACING TM1637 4-DIGIT 7-SEGMENT DISPLAY WITH RASPBERRY PI 4
+
+AIM:
+To interface a TM1637 4-digit 7-segment display module with Raspberry Pi 4, understand the two-wire serial communication protocol, and display a real-time digital clock using Python.
+
+COMPONENTS REQUIRED:
+1. Raspberry Pi 4 Model B
+2. TM1637 4-Digit 7-Segment Display Module (with colon)
+3. Female-to-Female Jumper Wires
+4. 5V Power Supply for Raspberry Pi
+5. Active Internet connection (for system time synchronization via NTP)
+
+PIN CONNECTIONS:
+TM1637 Pin VCC connects to 5V (Physical Pin 2)
+TM1637 Pin GND connects to Ground / GND (Physical Pin 6)
+TM1637 Pin CLK connects to GPIO 23 (Physical Pin 16)
+TM1637 Pin DIO connects to GPIO 24 (Physical Pin 18)
+
+THEORY:
+
+1. TM1637 Driver IC Architecture:
+The TM1637 is an integrated LED drive control circuit with a keyboard scan interface. In 4-digit display modules, it eliminates the need to control all 28 individual segment pins ($4 \text{ digits} \times 7 \text{ segments} + \text{colons}$) directly from the microcontroller. Instead, it drives common-anode LED segments via an internal multiplexing and display RAM circuitry, requiring only two communication lines: Clock (CLK) and Data Input/Output (DIO).
+
+2. Communication Protocol (Two-Wire Serial Interface):
+Although the interface resembles I2C, TM1637 does not strictly follow the standard I2C address protocol (it lacks device addressing bytes).
+- CLK (Clock Line): Synchronizes data transfer. Data on the DIO line must remain stable during the clock's HIGH period and can only change state when CLK is LOW.
+- DIO (Data Line): Serial bidirectional data transfer line.
+- Start Condition: DIO transitions from HIGH to LOW while CLK is HIGH.
+- Stop Condition: DIO transitions from LOW to HIGH while CLK is HIGH.
+- Acknowledge (ACK): The chip pulls DIO LOW on the 9th clock pulse to confirm receipt of each 8-bit packet.
+
+3. Time Representation and Display Multiplexing:
+The 4-digit display consists of four digits arranged sequentially (Digit 0 to Digit 3). The Python library converts numeric integer values into 7-segment lookup bitmasks (segments a, b, c, d, e, f, g, and DP/colon). The internal oscillator of the TM1637 refreshes the LED segments dynamically at high frequency, giving the illusion of a continuous, flicker-free display to the human eye through persistence of vision.
+
+4. Virtual Environment (venv) on Raspberry Pi OS:
+Modern Raspberry Pi OS releases enforce PEP 668, preventing global installation of Python packages via pip (`pip install`) into the system environment. Creating a dedicated virtual environment (`python3 -m venv env`) isolates project dependencies safely.
+
+CONSOLE SETUP COMMANDS:
+sudo apt update
+sudo apt install python3-venv
+python3 -m venv env
+source env/bin/activate
+pip install raspberrypi-tm1637
+
+PROGRAM CODE:
+Save file as clock_display.py
+
+import tm1637
+from time import strftime, sleep
+
+# Initialize TM1637 display on CLK=GPIO23 (Pin 16), DIO=GPIO24 (Pin 18)
+tm = tm1637.TM1637(clk=23, dio=24)
+
+try:
+    print("Digital Clock started on TM1637 display. Press Ctrl+C to stop.")
+    while True:
+        # Fetch current system time formatted as HHMM (e.g., "1430")
+        current_time = strftime("%H%M")
+        hour = int(current_time[:2])
+        minute = int(current_time[2:])
+
+        # Display hour and minute separated by colon
+        tm.numbers(hour, minute)
+        sleep(1)
+
+except KeyboardInterrupt:
+    # Clear all four digits on exit
+    tm.write([0, 0, 0, 0])
+    print("Clock stopped")
+
+EXECUTION COMMAND:
+python clock_display.py
+
+OBSERVATION AND OUTPUT:
+On Console:
+Digital Clock started on TM1637 display. Press Ctrl+C to stop.
+Clock stopped
+
+On Hardware:
+The TM1637 4-digit display turns on and renders the current local system hour and minute in 24-hour format (e.g., 14:30), updating every second. Pressing Ctrl+C clears the display digits completely.
+
+VIVA VOCE QUESTIONS AND ANSWERS:
+
+1. What is the role of the TM1637 driver IC?
+Answer: It is a dedicated LED controller that multiplexes and drives 7-segment displays using only two GPIO lines (CLK and DIO), offloading segment-refresh operations from the processor.
+
+2. Does the TM1637 use the standard I2C protocol?
+Answer: No. While it uses a two-wire serial interface similar to I2C with START, STOP, and ACK bits, it does not use standard 7-bit slave addresses.
+
+3. Why do we need python3-venv on newer Raspberry Pi OS versions?
+Answer: Newer Debian/Raspberry Pi OS versions enforce PEP 668 (externally managed environment). Creating a virtual environment isolates project libraries and prevents system package corruption.
+
+4. How do you control the brightness of the TM1637 display?
+Answer: The TM1637 IC has an internal duty-cycle register that adjusts brightness levels from 0 (lowest) to 7 (brightest), configurable in code using tm.brightness(level).
+
+5. What happens during tm.write([0, 0, 0, 0]) in the except block?
+Answer: It writes 0 to the segment registers of all four digits, extinguishing all LED segments so the display does not freeze on the last time reading.
