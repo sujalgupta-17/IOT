@@ -1,0 +1,126 @@
+PRACTICAL NO: 9
+TITLE: INTERFACING RASPBERRY PI CAMERA MODULE TO CAPTURE IMAGE AND VIDEO
+
+AIM:
+To interface the official Raspberry Pi Camera Module with Raspberry Pi 4 using the Camera Serial Interface (CSI) port, configure the camera drivers, and write Python scripts to capture still photographs and record high-definition video clips.
+
+COMPONENTS REQUIRED:
+1. Raspberry Pi 4 Model B (or Pi 3) with Raspberry Pi OS
+2. Raspberry Pi Camera Module (v1 / v2 / v3 / HQ)
+3. 15-pin Ribbon Flat Flexible Cable (FFC)
+4. Power Supply (5V 3A USB-C)
+5. HDMI Monitor or remote desktop (VNC) for visual output
+
+HARDWARE CONNECTIONS (CSI PORT):
+1. Locate the CSI port on the Raspberry Pi board (between the HDMI port and 3.5mm audio jack).
+2. Gently pull up the plastic locking tabs on the connector sides.
+3. Insert the 15-pin ribbon cable:
+   - Blue plastic stiffener faces towards the Ethernet / USB ports.
+   - Exposed silver metal contacts face towards the micro-HDMI ports.
+4. Press the plastic tabs back down to clamp the ribbon cable securely.
+5. Insert the opposite end into the camera module PCB with contacts facing the camera lens circuit.
+
+THEORY:
+
+1. Camera Serial Interface (CSI-2):
+The Raspberry Pi Camera connects via the dedicated CSI bus specified by the Mobile Industry Processor Interface (MIPI) Alliance. Unlike USB webcams that send frames over the shared USB bus and consume high CPU resources, the CSI bus transfers raw uncompressed pixel data directly to the Broadcom VideoCore Graphics Processing Unit (GPU) and Image Signal Processor (ISP) with low latency.
+
+2. Software Architecture (Picamera2 vs Legacy Picamera):
+- Legacy Stack (picamera): Relied on Broadcom's proprietary MMAL (Multi-Media Abstraction Layer) and OpenMAX firmware APIs.
+- Modern Stack (Picamera2): Built on top of the open-source Linux libcamera framework and V4L2 (Video for Linux 2) kernel API, providing better color processing, auto-focus support (Camera Module 3), and broad compatibility across modern Debian distributions (Bullseye and Bookworm).
+
+3. Sensor Warm-up and Auto-Tuning:
+Image sensors require a brief settling period (typically 2 seconds of delay using time.sleep(2)) before grabbing a frame. This allows the internal automated algorithms—Auto Exposure (AE), Auto White Balance (AWB), and analogue gain control—to measure scene illumination and stabilize exposure levels.
+
+4. Hardware Video Encoding:
+The Raspberry Pi hardware video processing engine compresses raw frame buffers in real time using an onboard H.264 (MPEG-4 AVC) encoder, generating compressed video output files without overloading the main CPU cores.
+
+CONSOLE SETUP COMMANDS:
+
+Step 1: Check Camera Connection
+Open terminal and verify sensor recognition:
+rpicam-hello --list-cameras
+
+Step 2: Install Libraries
+sudo apt update
+sudo apt install python3-pip python3-picamera2
+
+(For older legacy OS using standard picamera):
+sudo apt install python3-picamera
+
+PYTHON SOURCE CODE:
+
+Save file as camera_test.py
+
+import time
+from picamera2 import Picamera2
+
+# Initialize the camera instance
+picam2 = Picamera2()
+
+# Configure still capture at 1920x1080 resolution
+camera_config = picam2.create_still_configuration(main={"size": (1920, 1080)})
+picam2.configure(camera_config)
+
+# Start camera system
+picam2.start()
+print("Camera started. Warming up sensor...")
+time.sleep(2)
+
+# 1. Capture Still Photograph
+image_filename = "photo.jpg"
+picam2.capture_file(image_filename)
+print("Photo saved successfully as", image_filename)
+
+# 2. Record 5-Second Video
+video_filename = "video.mp4"
+print("Recording video for 5 seconds...")
+picam2.start_recording(picam2.create_video_configuration(), video_filename)
+time.sleep(5)
+picam2.stop_recording()
+print("Video saved successfully as", video_filename)
+
+# Release camera hardware cleanly
+picam2.stop()
+picam2.close()
+print("Camera released safely.")
+
+ALTERNATIVE TERMINAL COMMANDS (DIRECT EXECUTION):
+Capture a still picture:
+rpicam-still -o terminal_photo.jpg
+
+Record a 5-second video:
+rpicam-vid -t 5000 -o terminal_video.mp4
+
+EXECUTION COMMAND:
+python3 camera_test.py
+
+OBSERVATION AND OUTPUT:
+On Console:
+Camera started. Warming up sensor...
+Photo saved successfully as photo.jpg
+Recording video for 5 seconds...
+Video saved successfully as video.mp4
+Camera released safely.
+
+On File System:
+Two files are generated in the current working directory:
+1. photo.jpg (JPEG image file, 1920x1080)
+2. video.mp4 (H.264 encoded video clip, 5 seconds)
+
+VIVA VOCE QUESTIONS AND ANSWERS:
+
+1. What does CSI stand for, and why is it preferred over USB?
+Answer: CSI stands for Camera Serial Interface. It provides a direct high-speed point-to-point link to the GPU and hardware Image Signal Processor (ISP), delivering higher frame rates, lower latency, and zero CPU usage compared to USB webcams.
+
+2. Why is time.sleep(2) used before capturing an image?
+Answer: To allow the camera sensor's automated control loops (Auto White Balance, Auto Exposure, and digital gain) to adapt to the ambient room lighting.
+
+3. What is the difference between picamera and Picamera2?
+Answer: The legacy picamera library relied on closed-source MMAL firmware APIs, whereas Picamera2 uses the open-source libcamera architecture and standard Linux V4L2 drivers.
+
+4. Which hardware encoder compresses video on the Raspberry Pi?
+Answer: The Broadcom VideoCore GPU contains dedicated silicon for hardware H.264 video compression.
+
+5. How do you orient the ribbon cable in the Raspberry Pi CSI slot?
+Answer: The blue plastic stiffener must face away from the HDMI ports (towards the Ethernet/USB ports), and the silver conductive contacts must face toward the micro-HDMI ports.
