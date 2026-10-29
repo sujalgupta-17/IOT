@@ -1,0 +1,144 @@
+PRACTICAL NO: 7
+TITLE: INTERFACING RC522 RFID MODULE WITH RASPBERRY PI TO READ AND WRITE TO RFID TAGS
+
+AIM:
+To interface the RC522 RFID module with Raspberry Pi 4 using the SPI communication protocol, write data to a Mifare Classic 1K RFID tag, and read back the tag's Unique Identifier (UID) and stored content.
+
+COMPONENTS REQUIRED:
+1. Raspberry Pi 4 Model B
+2. RC522 RFID Reader/Writer Module (13.56 MHz)
+3. RFID Cards / Keyfobs (Mifare Classic 1K)
+4. Female-to-Female Jumper Wires
+5. Power Supply (5V 3A USB-C)
+
+PIN CONNECTIONS:
+RC522 Pin SDA / SS connects to Raspberry Pi 4 Physical Pin 24
+RC522 Pin SCK connects to Raspberry Pi 4 Physical Pin 23
+RC522 Pin MOSI connects to Raspberry Pi 4 Physical Pin 19
+RC522 Pin MISO connects to Raspberry Pi 4 Physical Pin 21
+RC522 Pin IRQ is Not connected
+RC522 Pin GND connects to Raspberry Pi 4 Physical Pin 6
+RC522 Pin RST connects to Raspberry Pi 4 Physical Pin 22
+RC522 Pin 3.3V connects to Raspberry Pi 4 Physical Pin 1
+
+THEORY:
+
+1. RFID Technology Overview:
+Radio Frequency Identification (RFID) is a non-contact, wireless communication method that utilizes radio frequency electromagnetic waves to identify objects, transmit information, and access data without direct line-of-sight. The system consists of an interrogator (reader) and a transponder (tag).
+
+2. Working Principle of RC522 (Near-Field Inductive Coupling):
+The RC522 module operates at 13.56 MHz High Frequency (HF) band conforming to ISO/IEC 14443 Type A standard. When a passive RFID tag is placed within the detection zone (2 to 5 cm):
+- The reader antenna produces a high-frequency alternating magnetic field.
+- By Faraday's Law of Electromagnetic Induction, this magnetic field induces an alternating electric voltage across the coil antenna inside the passive tag.
+- The induced current charges an internal storage capacitor which powers the tag's integrated circuit chip (meaning passive tags require no internal battery).
+- The tag transmits its Unique Identifier (UID) and data packets by modulating the load on the RF field (load modulation).
+
+3. Mifare Classic 1K Architecture:
+A Mifare 1K card has 1024 bytes (1 KB) of EEPROM memory organized into:
+- 16 Sectors (Sector 0 to 15).
+- 4 Blocks per sector (Total 64 blocks, each holding 16 bytes).
+- Sector 0, Block 0: Hardcoded manufacturer details and tag UID (read-only in authentic tags).
+- Sector Trailer (Block 3 of every sector): Stores authentication Key A, access bits, and Key B.
+- Data Blocks: Blocks where user payloads (such as student names, balance, or tokens) are written and read after sector authentication.
+
+4. Serial Peripheral Interface (SPI) Bus:
+The RC522 communicates with the Raspberry Pi over SPI, a synchronous master-slave full-duplex protocol:
+- MOSI (Master Out Slave In): Physical Pin 19 transmits commands and write data from Pi to reader.
+- MISO (Master In Slave Out): Physical Pin 21 streams card UID and block data from reader to Pi.
+- SCK (Serial Clock): Physical Pin 23 generates clock pulses to synchronize bit transitions.
+- SDA / SS (Slave Select / Chip Enable CE0): Physical Pin 24 selects and enables the RC522 module.
+- RST (Reset): Physical Pin 22 provides hardware reset and power-down control.
+
+CONSOLE SETUP COMMANDS:
+
+Step 1: Enable Hardware SPI Interface
+sudo raspi-config
+Navigate: Interface Options -> SPI -> Enable -> Yes
+sudo reboot
+
+Step 2: Verify SPI Bus Detection
+ls /dev/spidev*
+(Should list /dev/spidev0.0 and /dev/spidev0.1)
+
+Step 3: Install Dependencies and Libraries
+sudo apt update
+sudo apt install python3-spidev python3-rpi.gpio
+pip3 install mfrc522
+
+Step 4: Create Workspace Directory
+mkdir rfid
+cd rfid
+
+PYTHON PROGRAMS:
+
+PROGRAM 1: Write to RFID Tag
+Save as write_rfid.py (nano write_rfid.py)
+
+from mfrc522 import SimpleMFRC522
+import RPi.GPIO as GPIO
+
+reader = SimpleMFRC522()
+
+try:
+    text = input("Enter data to write to RFID card: ")
+    print("Place your RFID card on the reader...")
+    reader.write(text)
+    print("Data written successfully!")
+finally:
+    GPIO.cleanup()
+
+
+PROGRAM 2: Read from RFID Tag
+Save as rfid.py (nano rfid.py)
+
+from mfrc522 import SimpleMFRC522
+import RPi.GPIO as GPIO
+
+reader = SimpleMFRC522()
+
+try:
+    print("Place your RFID card/tag on the RC522 reader...")
+    id, text = reader.read()
+    print("Card UID:", id)
+    print("Data:", text)
+finally:
+    GPIO.cleanup()
+
+EXECUTION COMMANDS:
+python3 write_rfid.py
+python3 rfid.py
+
+OBSERVATION AND OUTPUT:
+
+Writing Data:
+$ python3 write_rfid.py
+Enter data to write to RFID card: Student_B1_25
+Place your RFID card on the reader...
+Data written successfully!
+
+Reading Data:
+$ python3 rfid.py
+Place your RFID card/tag on the RC522 reader...
+Card UID: 482937502914
+Data: Student_B1_25
+
+VIVA VOCE QUESTIONS AND ANSWERS:
+
+1. What is the operating frequency of the RC522 RFID reader?
+Answer: The RC522 operates at 13.56 MHz High Frequency (HF) band under the ISO/IEC 14443 Type A protocol.
+
+2. How do passive RFID tags function without a built-in battery?
+Answer: Passive tags use near-field inductive coupling. The magnetic field radiated by the reader's coil antenna induces a voltage across the tag's internal antenna, powering its microchip.
+
+3. Why is the RC522 connected to the 3.3V pin and not 5V?
+Answer: The RC522 IC is rated strictly for 2.5V to 3.6V operation. Connecting it to a 5V supply line or applying 5V logic signals will damage the chip.
+
+4. What is the role of the SPI lines MOSI, MISO, SCK, and SS?
+Answer:
+- MOSI sends commands and data from the Raspberry Pi (Master) to RC522 (Slave).
+- MISO sends card data and tag UID from RC522 back to the Raspberry Pi.
+- SCK supplies the synchronous clock timing.
+- SS/SDA activates the target chip when pulled LOW.
+
+5. What is stored in Sector 0, Block 0 of a Mifare Classic 1K card?
+Answer: Sector 0, Block 0 holds the card's Unique Identifier (UID) and manufacturer data. It is read-only in standard cards to avoid cloning.
