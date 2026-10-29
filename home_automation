@@ -1,0 +1,189 @@
+PRACTICAL NO: 10
+TITLE: DESIGN IOT BASED HOME AUTOMATION SYSTEM USING RASPBERRY PI
+
+AIM:
+To design and implement an IoT-based home automation system using Raspberry Pi 4 to control multiple electrical appliances via an optocoupler-isolated relay module through a local web dashboard built with Flask.
+
+COMPONENTS REQUIRED:
+1. Raspberry Pi 4 Model B (or Pi 3) with Raspberry Pi OS
+2. 4-Channel 5V Relay Module (Optocoupler isolated)
+3. 4x LEDs with 330 Ohm resistors (or AC lamps for demonstration)
+4. Solderless Breadboard
+5. Female-to-Female and Male-to-Female Jumper Wires
+6. 5V 3A USB-C Power Supply
+7. Smartphone, PC, or tablet connected to the same local Wi-Fi network
+
+PIN CONNECTIONS:
+Relay VCC connects to Raspberry Pi 4 Physical Pin 2 (5V)
+Relay GND connects to Raspberry Pi 4 Physical Pin 6 (GND)
+Relay IN1 connects to Raspberry Pi 4 Physical Pin 11 (BCM GPIO 17)
+Relay IN2 connects to Raspberry Pi 4 Physical Pin 13 (BCM GPIO 27)
+Relay IN3 connects to Raspberry Pi 4 Physical Pin 15 (BCM GPIO 22)
+Relay IN4 connects to Raspberry Pi 4 Physical Pin 16 (BCM GPIO 23)
+
+Output Wiring (Per Relay):
+Relay COM terminal connects to 3.3V power rail (or AC live line)
+Relay NO (Normally Open) terminal connects to LED anode via 330 Ohm resistor (or appliance phase)
+LED cathode connects to Ground (or AC neutral return)
+
+THEORY:
+
+1. System Architecture:
+An IoT home automation system connects physical appliances to a local or wide-area network for programmatic control. It consists of:
+- Perception/Actuation Layer: Relay module acting as an electromechanical actuator to physically open or close high-current paths.
+- Controller Layer: Raspberry Pi running a Python Flask application that listens on port 5000 and manipulates GPIO voltage levels.
+- Application/Presentation Layer: A browser-rendered dashboard accessible from phones or laptops over local Wi-Fi.
+
+2. Working Principle of Relays:
+A relay is an electrically operated switch. Applying an electrical control signal energizes an internal electromagnetic coil, generating a magnetic field that physically pulls a movable armature to toggle between Normally Closed (NC) and Normally Open (NO) contacts.
+- Active-LOW Configuration: Most commercial 5V relay modules are active-LOW. Driving a GPIO pin to LOW (0V) completes the circuit through an onboard optocoupler LED, switching the relay ON. Driving the pin HIGH (3.3V) turns the relay OFF.
+- Galvanic Isolation: Onboard optocouplers (such as PC817) isolate the low-voltage Raspberry Pi digital logic from the high-voltage load circuit using an internal optical barrier (infrared LED and phototransistor), preventing back EMF and power surges from reaching the processor.
+
+3. Web Server Design (Flask):
+Flask is a lightweight Python WSGI web framework. It maps URL routes to Python functions. When a user taps a button on the browser, an HTTP request is dispatched to the Raspberry Pi IP address. The corresponding route changes the target GPIO pin state and updates the web interface status.
+
+CONSOLE SETUP COMMANDS:
+
+Step 1: Install Flask
+sudo apt update
+sudo apt install python3-pip python3-flask python3-rpi.gpio
+
+Step 2: Create Project Folder Structure
+mkdir home_automation
+cd home_automation
+mkdir templates
+
+PROGRAM CODE:
+
+File 1: Backend Server (app.py)
+Save as app.py in ~/home_automation:
+
+from flask import Flask, render_template, redirect, url_for
+import RPi.GPIO as GPIO
+
+app = Flask(__name__)
+
+RELAYS = {
+    1: {"name": "Living Room Light", "pin": 17, "state": "OFF"},
+    2: {"name": "Ceiling Fan",       "pin": 27, "state": "OFF"},
+    3: {"name": "Kitchen Outlet",    "pin": 22, "state": "OFF"},
+    4: {"name": "Porch Lamp",        "pin": 23, "state": "OFF"}
+}
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+
+for r in RELAYS.values():
+    GPIO.setup(r["pin"], GPIO.OUT)
+    GPIO.output(r["pin"], GPIO.HIGH)
+
+@app.route("/")
+def index():
+    return render_template("index.html", relays=RELAYS)
+
+@app.route("/toggle/<int:relay_id>/<action>")
+def toggle_relay(relay_id, action):
+    if relay_id in RELAYS:
+        pin = RELAYS[relay_id]["pin"]
+        if action == "on":
+            GPIO.output(pin, GPIO.LOW)
+            RELAYS[relay_id]["state"] = "ON"
+        elif action == "off":
+            GPIO.output(pin, GPIO.HIGH)
+            RELAYS[relay_id]["state"] = "OFF"
+    return redirect(url_for("index"))
+
+@app.route("/all/<action>")
+def toggle_all(action):
+    for r in RELAYS.values():
+        if action == "on":
+            GPIO.output(r["pin"], GPIO.LOW)
+            r["state"] = "ON"
+        elif action == "off":
+            GPIO.output(r["pin"], GPIO.HIGH)
+            r["state"] = "OFF"
+    return redirect(url_for("index"))
+
+if __name__ == "__main__":
+    try:
+        app.run(host="0.0.0.0", port=5000, debug=False)
+    finally:
+        GPIO.cleanup()
+
+
+File 2: Frontend Dashboard (templates/index.html)
+Save as index.html in ~/home_automation/templates:
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>IoT Home Automation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #f4f6f8; margin: 0; padding: 20px; }
+        h1 { color: #222; }
+        .grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-top: 20px; }
+        .card { background: #fff; padding: 15px; border-radius: 8px; width: 200px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+        .btn { display: inline-block; padding: 8px 16px; margin: 4px; text-decoration: none; border-radius: 4px; font-weight: bold; }
+        .btn-on { background: #28a745; color: #fff; }
+        .btn-off { background: #dc3545; color: #fff; }
+        .status { font-weight: bold; margin: 8px 0; }
+        .status-ON { color: #28a745; }
+        .status-OFF { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <h1>Home Automation Dashboard</h1>
+    <div class="grid">
+        {% for id, relay in relays.items() %}
+        <div class="card">
+            <h3>{{ relay.name }}</h3>
+            <p class="status status-{{ relay.state }}">Status: {{ relay.state }}</p>
+            <a href="/toggle/{{ id }}/on" class="btn btn-on">ON</a>
+            <a href="/toggle/{{ id }}/off" class="btn btn-off">OFF</a>
+        </div>
+        {% endfor %}
+    </div>
+    <div style="margin-top: 25px;">
+        <a href="/all/on" class="btn btn-on">All ON</a>
+        <a href="/all/off" class="btn btn-off">All OFF</a>
+    </div>
+</body>
+</html>
+
+EXECUTION STEPS:
+1. Determine Raspberry Pi local IP:
+   hostname -I
+2. Start the web application:
+   python3 app.py
+3. Open a browser on a phone or PC connected to the same Wi-Fi:
+   http://<RASPBERRY_PI_IP>:5000
+
+OBSERVATION AND OUTPUT:
+On Terminal:
+* Serving Flask app 'app'
+* Running on http://0.0.0.0:5000
+192.168.1.12 - - [29/Oct/2026 21:40:00] "GET / HTTP/1.1" 200 -
+192.168.1.12 - - [29/Oct/2026 21:40:04] "GET /toggle/1/on HTTP/1.1" 302 -
+
+On Hardware / Browser:
+Clicking the ON button activates Relay 1 with an audible click, the corresponding indicator LED turns on, and the dashboard reflects 'Status: ON'. Clicking OFF returns the pin to HIGH and opens the relay contact.
+
+VIVA VOCE QUESTIONS AND ANSWERS:
+
+1. Why are relays used instead of driving loads directly from GPIO pins?
+Answer: Raspberry Pi GPIO pins can only source 3.3V DC at up to 16 mA. Relays act as electromechanical switches that use low-voltage signals to safely switch high-voltage AC (230V) or high-current DC devices.
+
+2. What is the role of an optocoupler on the relay board?
+Answer: An optocoupler provides optical galvanic isolation between the Raspberry Pi logic and the relay coil/load circuits, protecting the microcontroller from voltage spikes, inductive kickback, and electrical noise.
+
+3. What does Active-LOW relay logic mean?
+Answer: The relay coil energizes and switches the contacts to NO (Normally Open) when the input pin is driven to digital LOW (0V). When set to HIGH (3.3V), the relay remains de-energized.
+
+4. What is the difference between NO and NC terminals on a relay?
+Answer:
+- NO (Normally Open): Contact remains open (circuit disconnected) until the relay is triggered.
+- NC (Normally Closed): Contact remains closed (circuit connected) until the relay is triggered.
+
+5. Why is the Flask server bound to host='0.0.0.0'?
+Answer: Binding to 0.0.0.0 instructs Flask to accept requests from all network adapters, allowing other devices on the same local Wi-Fi to reach the dashboard.
