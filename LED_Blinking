@@ -1,0 +1,107 @@
+PRACTICAL EXAMINATION SUBMISSION SHEET
+
+Practical No: 1
+Title: Interfacing LED with Raspberry Pi 4 using gpiozero Library
+
+Aim:
+To interface a Light Emitting Diode (LED) with Raspberry Pi 4 GPIO pins using the gpiozero library, observe digital output blinking patterns, understand current-limiting circuit design, and prepare core IoT concepts for viva voce.
+
+Apparatus and Components Required:
+1. Raspberry Pi 4 Model B
+2. 5mm Light Emitting Diode (LED)
+3. 330 Ohm Resistor (1/4 Watt)
+4. Solderless Breadboard
+5. Female-to-Male Jumper Wires
+6. 5V 3A USB-C Power Supply
+
+Pin Connections:
+Resistor connected to LED long leg (+) -> GPIO 17, physical pin 11
+LED short leg (-) -> GND, physical pin 6
+
+Theory:
+
+1. Raspberry Pi GPIO Fundamentals:
+The Raspberry Pi 4 features a 40-pin header offering 26 General Purpose Input/Output (GPIO) pins operating at 3.3V CMOS logic. A logic HIGH outputs 3.3V, and a logic LOW outputs 0V. Supplying 5V to any GPIO pin causes irreversible damage to the Broadcom SoC.
+
+2. Working Principle of LED:
+An LED is a P-N junction diode that emits light through electroluminescence when forward-biased. Electrons recombine with electron holes in the semiconductor depletion layer, emitting energy as photons. The anode is the longer lead (positive terminal) and the cathode is the shorter lead (negative terminal).
+
+3. Need for Current-Limiting Resistor:
+An illuminated forward-biased diode presents negligible internal resistance. Connecting it directly between 3.3V and Ground results in an overcurrent condition that damages the Raspberry Pi GPIO pin driver (safe limit is under 16 mA). By Ohm's Law:
+R = (V_supply - V_forward) / I
+For V_supply = 3.3V, V_forward = 2.0V, and I = 4 mA:
+R = (3.3 - 2.0) / 0.004 = 325 Ohms.
+Hence, a 330 Ohm resistor is placed in series.
+
+4. gpiozero Architecture:
+The gpiozero library is a high-level Python library that provides an object-oriented approach for physical computing. It uses BCM (Broadcom) numbering by default and automatically manages pin setup and resource cleanup upon program exit.
+
+Console Commands:
+sudo apt update
+sudo apt install python3-gpiozero
+
+Program Code:
+from gpiozero import LED
+from time import sleep
+
+led = LED(17)
+
+try:
+    for i in range(10):
+        led.on()
+        sleep(0.2)
+        led.off()
+        sleep(0.2)
+except KeyboardInterrupt:
+    led.off()
+    print("Program stopped")
+
+led.off()
+
+Execution Command:
+python3 led_blink.py
+
+Observation and Output:
+The LED connected to GPIO 17 (physical pin 11) blinks ON and OFF for 10 cycles with an interval of 0.2 seconds and turns off when execution ends. If interrupted using Ctrl+C, the script prints "Program stopped" and resets the LED to OFF.
+
+Viva Voce Preparation:
+
+1. What is IoT and its four main layers?
+IoT is a network of physical devices embedded with sensors, software, and network connectivity that collect and exchange data over the internet.
+Layers:
+- Perception/Sensing Layer: Collects physical data (Sensors, Actuators, RFID).
+- Network Layer: Transmits data (Wi-Fi, Cellular, Zigbee, LoRaWAN).
+- Middleware/Processing Layer: Cloud storage, message brokers, and data analytics.
+- Application Layer: End-user interfaces, monitoring dashboards, and automation logic.
+
+2. What is the difference between a Sensor and an Actuator?
+- Sensor: An input device that detects physical changes in the environment and converts them into electrical signals (e.g., DHT11 temperature sensor, HC-SR04 ultrasonic sensor, LDR).
+- Actuator: An output device that converts electrical control signals into physical motion or mechanical action (e.g., Relays, DC Motors, Buzzers, Solenoid valves).
+
+3. What is MQTT protocol and how does it work?
+MQTT (Message Queuing Telemetry Transport) is a lightweight publish-subscribe messaging protocol designed for low-bandwidth, high-latency, or constrained networks. It runs on top of TCP/IP (port 1883, TLS port 8883).
+Key elements:
+- Publisher: Client sending data under a specific topic.
+- Broker: Central server (e.g., Mosquitto, HiveMQ) that receives and routes messages.
+- Subscriber: Client listening to a topic.
+Quality of Service (QoS) Levels:
+- QoS 0: At most once (no delivery guarantee).
+- QoS 1: At least once (guaranteed delivery, possible duplicates).
+- QoS 2: Exactly once (guaranteed delivery with four-step handshake, zero duplicates).
+
+4. Why does gpiozero use BCM numbering?
+gpiozero uses Broadcom (BCM) channel numbering to align with the underlying SoC hardware mapping, so LED(17) corresponds directly to BCM GPIO 17 (physical pin 11).
+
+5. What happens if you connect the LED without a series resistor?
+Without a series resistor, excessive current will draw through the diode, permanently burning the LED junction and damaging the internal switching transistor of the Raspberry Pi GPIO pin.
+
+Index Page Template:
+Roll No: _______________    Name: ______________________    Batch: [ B1 / B2 ]
+
+Sr. No. | Date       | Title of Experiment                       | Page | Sign
+1.      |            | LED Blinking using Raspberry Pi 4 GPIO    |      |
+2.      |            | Interfacing DHT11 Temperature & Humidity  |      |
+3.      |            | Distance Measurement using HC-SR04        |      |
+4.      |            | RFID Reader RC522 Interfacing via SPI     |      |
+5.      |            | Actuator Control using 5V Relay Module    |      |
+6.      |            | MQTT Publish-Subscribe Telemetry Transfer |      |
