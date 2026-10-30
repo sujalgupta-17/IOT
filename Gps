@@ -1,0 +1,153 @@
+PRACTICAL NO: 8
+TITLE: INTERFACING GPS MODULE (NEO-6M) WITH RASPBERRY PI
+
+AIM:
+To interface the NEO-6M GPS receiver module with Raspberry Pi 4 using the Universal Asynchronous Receiver-Transmitter (UART) serial interface, parse standard NMEA-0183 sentences, and extract real-time geographic coordinates (Latitude, Longitude, Altitude, and UTC Time).
+
+COMPONENTS REQUIRED:
+1. Raspberry Pi 4 Model B (or Pi 3) with Raspberry Pi OS
+2. NEO-6M GPS Receiver Module (with external ceramic patch antenna)
+3. Female-to-Female Jumper Wires
+4. 5V 3A Power Supply
+5. USB-to-UART converter (optional, if testing via USB)
+
+PIN CONNECTIONS (HARDWARE UART):
+NEO-6M Pin VCC connects to Raspberry Pi 4 Physical Pin 2 (5V or 3.3V)
+NEO-6M Pin GND connects to Raspberry Pi 4 Physical Pin 6 (GND)
+NEO-6M Pin TXD connects to Raspberry Pi 4 Physical Pin 10 (GPIO 15 / RXD0)
+NEO-6M Pin RXD connects to Raspberry Pi 4 Physical Pin 8 (GPIO 14 / TXD0)
+
+Important Wiring Note:
+Transmitter (TX) on the GPS module must connect crosswise to Receiver (RX) on the Raspberry Pi.
+
+THEORY:
+
+1. Global Positioning System (GPS) Overview:
+GPS is a satellite-based radionavigation system owned by the United States government. It uses a constellation of at least 24 Medium Earth Orbit (MEO) satellites transmitting synchronized radio signals at 1575.42 MHz (L1 band). A GPS receiver calculates its three-dimensional position (latitude, longitude, altitude) and exact time by measuring the time-of-flight of signals from at least 4 satellites via trilateration.
+
+2. NMEA-0183 Communication Standard:
+The NEO-6M module outputs serial data formatted according to the National Marine Electronics Association (NMEA) 0183 standard. Data is transmitted as ASCII strings called sentences starting with '$' and ending with a carriage return and line feed (\r\n).
+Key NMEA Sentences:
+- $GPGGA (Global Positioning System Fix Data): Provides 3D location fix, latitude, longitude, elevation/altitude, number of satellites tracked, and fix quality.
+- $GPRMC (Recommended Minimum Specific GPS Data): Contains time, date, latitude, longitude, speed over ground, and fix validity status.
+
+3. Coordinate Representation & Conversion:
+Raw NMEA latitude is output in Degrees and Decimal Minutes (ddmm.mmmm).
+To convert to standard Decimal Degrees (DD):
+Decimal Degrees = dd + (mm.mmmm / 60)
+For Southern latitude or Western longitude, the resulting value is negative.
+
+4. Raspberry Pi Primary UART Configuration:
+By default on Raspberry Pi 3 and 4, the primary hardware UART (/dev/ttyAMA0) is assigned to the onboard Bluetooth controller, while the mini-UART (/dev/ttyS0) is assigned to GPIO pins 14 and 15. The serial terminal console must be disabled from raspi-config so that the Python script can access the serial port without kernel login interference.
+
+SYSTEM CONFIGURATION AND PREPARATION:
+
+Step 1: Disable Serial Console & Enable Hardware Serial
+1. Open the configuration tool:
+   sudo raspi-config
+2. Navigate to: Interface Options -> Serial Port
+3. "Would you like a login shell to be accessible over serial?" -> Select NO.
+4. "Would you like the serial port hardware to be enabled?" -> Select YES.
+5. Exit raspi-config and reboot:
+   sudo reboot
+
+Step 2: Install Python Serial and NMEA Parsing Packages
+sudo apt update
+sudo apt install python3-serial python3-pip
+pip3 install pynmea2
+
+PROGRAM CODE:
+
+METHOD 1: Using pynmea2 library for structured parsing
+Save as gps_reader.py:
+
+import serial
+import time
+import pynmea2
+
+# Set serial port (use /dev/ttyAMA0 or /dev/serial0)
+SERIAL_PORT = "/dev/serial0"
+BAUD_RATE = 9600
+
+try:
+    ser = serial.Serial(SERIAL_PORT, baudrate=BAUD_RATE, timeout=1.0)
+    print("GPS Receiver initialized on", SERIAL_PORT)
+    print("Waiting for satellite fix (antenna must have open sky view)...")
+
+    while True:
+        raw_line = ser.readline().decode('ascii', errors='replace').strip()
+        
+        # Look for the Recommended Minimum Specific GPS sentence ($GPRMC or $GNRMC)
+        if raw_line.startswith('$GPRMC') or raw_line.startswith('$GNRMC'):
+            try:
+                msg = pynmea2.parse(raw_line)
+                if msg.status == 'A':  # 'A' indicates valid data fix ('V' means void/no fix)
+                    latitude = msg.latitude
+                    longitude = msg.longitude
+                    print(f"Time (UTC): {msg.timestamp} | Lat: {latitude:.6f} | Lon: {longitude:.6f} | Speed: {msg.spd_over_grnd} knots")
+                else:
+                    print("Searching for satellites... (No Fix)")
+            except pynmea2.ParseError:
+                continue
+
+except KeyboardInterrupt:
+    print("\nStopping GPS reader...")
+finally:
+    if 'ser' in locals() and ser.is_open:
+        ser.close()
+    print("Serial port closed safely.")
+
+
+METHOD 2: Raw Serial NMEA Reader (Without external libraries)
+Save as raw_gps.py:
+
+import serial
+
+ser = serial.Serial('/dev/serial0', baudrate=9600, timeout=1)
+
+try:
+    print("Reading raw NMEA sentences from GPS:")
+    while True:
+        line = ser.readline().decode('utf-8', errors='ignore')
+        if line:
+            print(line.strip())
+except KeyboardInterrupt:
+    ser.close()
+    print("Port closed.")
+
+EXECUTION COMMAND:
+python3 gps_reader.py
+
+OBSERVATION AND OUTPUT:
+On Console (Searching for satellites):
+GPS Receiver initialized on /dev/serial0
+Waiting for satellite fix (antenna must have open sky view)...
+Searching for satellites... (No Fix)
+Searching for satellites... (No Fix)
+
+On Console (Once satellite lock is acquired):
+Time (UTC): 04:15:32 | Lat: 19.076090 | Lon: 72.877426 | Speed: 0.12 knots
+Time (UTC): 04:15:33 | Lat: 19.076092 | Lon: 72.877428 | Speed: 0.08 knots
+
+Hardware Indicator:
+The tiny onboard PPS (Pulse Per Second) LED on the NEO-6M blinks once per second when a valid satellite lock is established.
+
+VIVA VOCE QUESTIONS AND ANSWERS:
+
+1. What is the communication protocol between the NEO-6M GPS module and Raspberry Pi?
+Answer: Universal Asynchronous Receiver-Transmitter (UART) serial communication at a standard default baud rate of 9600 bps.
+
+2. Why does the GPS module's TX pin connect to the Raspberry Pi's RX pin?
+Answer: Serial communication is directional. The GPS module transmits data out via TX, which must be received by the Raspberry Pi input receiver line (RX).
+
+3. What is NMEA-0183?
+Answer: NMEA-0183 is an electrical and data specification standard developed by the National Marine Electronics Association for serial communication between marine electronics, commonly used by GPS modules to output location strings.
+
+4. What is the minimum number of satellites required for a 3D location fix?
+Answer: At least 4 satellites are required. Three satellites determine latitude, longitude, and altitude by trilateration, while the fourth satellite corrects receiver clock bias.
+
+5. What does the blinking PPS LED on the NEO-6M module indicate?
+Answer: The PPS (Pulse Per Second) LED flashes once every second to indicate that the module has successfully locked onto sufficient GPS satellites and is outputting valid location fixes.
+
+6. Why is it necessary to disable the serial login console in raspi-config?
+Answer: By default, the Linux OS runs a serial Getty login terminal service on /dev/serial0. If not disabled, the OS and the Python script compete for incoming data, corrupting GPS sentence reception.
